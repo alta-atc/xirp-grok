@@ -34,6 +34,8 @@ import {
   applyParseOpts,
 } from "./transcript.js";
 
+import { grokHookCapabilities, grokHookScript, grokHookInstallEntry } from "./hooks.js";
+
 const AGENT = "grok";
 const PARSED_SCHEMA = "squab.session-parsed/v1";
 const DIR_MODE = 0o700;
@@ -483,6 +485,10 @@ const grokAdapter = {
     lastUpdated: "2026-09-12",
     list: () => settingsCatalogItems.map((item) => ({ ...item })),
   },
+
+  hookCapabilities: grokHookCapabilities,
+  hookScript: grokHookScript,
+  hookInstallEntry: grokHookInstallEntry,
 };
 
 const grokHarnessDef = {

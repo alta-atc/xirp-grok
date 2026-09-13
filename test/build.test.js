@@ -98,9 +98,37 @@ test("the built harness registers the expected harness and adapter shapes", asyn
     assert.equal(typeof adapter[optional], "function", `missing optional ${optional}`);
   }
   assert.equal(typeof adapter.settingsCatalog.list, "function");
-  for (const absent of ["hookCapabilities", "hookScript", "hookInstallEntry"]) {
-    assert.equal(adapter[absent], undefined, `${absent} must stay unimplemented`);
-  }
+
+  assert.equal(adapter.hookCapabilities.lastUpdated, "2026-09-12");
+  assert.deepEqual(adapter.hookCapabilities.supports, {
+    notification: false,
+    preToolUse: true,
+    postToolUse: true,
+    stop: true,
+    sessionStart: true,
+    permissionRequest: false,
+    statusLine: false,
+  });
+  assert.equal(typeof adapter.hookScript, "function");
+  assert.equal(typeof adapter.hookInstallEntry, "function");
+
+  const script = adapter.hookScript("preToolUse", {
+    daemonUrl: "http://127.0.0.1:9999/hook",
+    authToken: "tok",
+  });
+  assert.match(script, /hook-script grok preToolUse/);
+  assert.match(script, /DAEMON_URL = 'http:\/\/127\.0\.0\.1:9999\/hook'/);
+  assert.match(script, /AUTH_TOKEN = 'tok'/);
+  assert.match(script, /payload\.sessionId/);
+
+  const entry = adapter.hookInstallEntry("preToolUse", "/tmp/hook.js");
+  assert.match(entry.settingsFile, /\.grok[/\\]hooks[/\\]xirp\.json$/);
+  assert.deepEqual(entry.mergePath, ["hooks", "PreToolUse"]);
+  assert.equal(entry.fragment.hooks[0].command, "/tmp/hook.js");
+  assert.equal(entry.mergeOp, "array-append");
+
+  assert.throws(() => adapter.hookScript("notification", { daemonUrl: "http://x" }));
+  assert.throws(() => adapter.hookInstallEntry("notification", "/tmp/hook.js"));
 });
 
 test("the built harness loads under Xirp's bundled node runtime", async (t) => {
