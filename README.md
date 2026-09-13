@@ -37,29 +37,48 @@ Nothing else is modified. `app.asar` is never touched.
 
 ## Install
 
+Run these **from your own terminal, as sudo**. Do not run `apply` from inside Claude Code,
+Codex, Xirp, or any other agent or TUI: macOS attributes the write to whichever app hosts the
+shell, and those apps do not have permission to modify other app bundles, so the patch fails
+with `EPERM` even though you own the files.
+
 ```sh
 git clone https://github.com/alta-atc/xirp-grok
 cd xirp-grok
 npm run build
-node bin/xirp-grok.js apply
+sudo node bin/xirp-grok.js apply
 ```
 
-Or link it onto your `PATH`:
+Or link it onto your `PATH` and run `sudo xirp-grok apply`.
+
+Quit Xirp first, then **launch it again** after the patch. Grok appears in the agent picker.
+
+### Why sudo, and the alternative
+
+Since macOS 13, writing inside another app's bundle in `/Applications` is gated by the
+**App Management** privacy permission (the bundle carries `com.apple.provenance`). A plain
+terminal does not have it, so `apply` and `remove` fail with:
+
+```
+error: EPERM: operation not permitted, copyfile '/Applications/Xirp.app/.../index-<hash>.js' -> ...
+```
+
+Two ways through:
+
+1. **`sudo`** (simplest). The state marker in `~/.xirp-grok/` is chowned back to your user, so
+   `status` and `doctor` keep working without sudo.
+2. **Grant your terminal App Management.** System Settings → **Privacy & Security** →
+   **App Management** → turn on **Terminal** (or iTerm2, Ghostty, etc.; click **+** and pick the
+   app if it is not listed). Quit and reopen the terminal for the grant to take effect. After
+   that, `apply` works without sudo.
+
+The launchd watcher (`install-watcher`) runs unprivileged as `node`, so it only works once
+App Management is granted to that `node` binary. Until then, re-apply by hand after each
+Xirp update:
 
 ```sh
-npm link
-xirp-grok apply
+sudo node bin/xirp-grok.js apply --if-needed
 ```
-
-> **macOS App Management.** Since macOS 13, writing inside another app's bundle in
-> `/Applications` needs the "App Management" privacy permission, and a plain terminal usually
-> does not have it, so `apply`/`remove` fail with `EPERM` even though you own the files.
-> Either run them with `sudo` (`sudo node bin/xirp-grok.js apply`; the state marker stays owned
-> by you) or grant your terminal app App Management in System Settings > Privacy & Security and
-> reopen it. The launchd watcher runs unprivileged, so it only works once that permission is
-> granted to the `node` binary it runs.
-
-Then **restart Xirp**. Grok will appear in the agent picker.
 
 ## Commands
 
