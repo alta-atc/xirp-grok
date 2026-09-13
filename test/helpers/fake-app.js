@@ -6,7 +6,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const SIGNATURE = 'flag: "--launch-cursor"';
+// Minified form, exactly as shipped in Xirp's squab chunk (no space after the colon).
+export const SIGNATURE = 'flag:"--launch-cursor"';
 
 function fakeNodeScript({ includeGrok = true } = {}) {
   const harnesses = [{ agentName: "cursor" }];
@@ -100,9 +101,9 @@ export function createFakeApp({
   const cliPath = path.join(squabDir, "cli.js");
   writeFileSync(cliPath, "// fake squab cli\n", "utf8");
 
-  const rtOt = withRtOt ? "function Fi(){ rt(a); ot(b); }" : "// no rt/ot here";
+  const rtOt = withRtOt ? "function _c(){V(Qe),V(Zn),z(yc),z(vc)}" : "// no registry calls here";
   const signature = withSignature ? SIGNATURE : "flag: \"--not-it\"";
-  const chunkContent = `// synthetic squab chunk\nconst CURSOR = { ${signature}, agentName: "cursor" };\n${rtOt}\n`;
+  const chunkContent = `// synthetic squab chunk\nconst yc={flag:"--launch-claude",agentName:"claude"},vc={${signature},agentName:"cursor"};\n${rtOt}\n`;
 
   const chunkPath = path.join(chunksDir, chunkName);
   writeFileSync(chunkPath, chunkContent, "utf8");

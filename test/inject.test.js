@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createFakeApp, fakeHome, SIGNATURE } from "./helpers/fake-app.js";
-import { apply, remove, IMPORT_LINE, HARNESS_FILENAME, PatchError } from "../src/patcher/inject.js";
+import { apply, remove, isPatched, buildImportLine, detectRegistryIdentifiers, HARNESS_FILENAME, PatchError } from "../src/patcher/inject.js";
 import { LocateError } from "../src/patcher/locate.js";
 import { readState } from "../src/patcher/state.js";
 
@@ -26,7 +26,8 @@ test("apply appends the import line, backs up the chunk, copies the harness, and
     assert.equal(result.action, "applied");
 
     const patchedContent = readFileSync(fake.chunkPath, "utf8");
-    assert.ok(patchedContent.includes(IMPORT_LINE));
+    assert.ok(isPatched(patchedContent));
+    assert.ok(patchedContent.endsWith(buildImportLine({ registerAdapter: "V", registerAgent: "z" })));
 
     const backupPath = `${fake.chunkPath}.orig`;
     assert.ok(existsSync(backupPath), ".orig backup should exist");
@@ -70,7 +71,7 @@ test("apply is idempotent: a second apply is a no-op and does not duplicate the 
 
     const afterSecond = readFileSync(fake.chunkPath, "utf8");
     assert.equal(afterSecond, afterFirst);
-    const occurrences = afterSecond.split(IMPORT_LINE).length - 1;
+    const occurrences = afterSecond.split('from "./grok-harness.js"').length - 1;
     assert.equal(occurrences, 1);
   } finally {
     rmSync(fake.tmpDir, { recursive: true, force: true });
@@ -160,7 +161,7 @@ test("apply re-applies after Xirp updates (chunk replaced with a new, unpatched 
     // (new content hash => new filename) that doesn't have the import yet.
     unlinkSync(fake.chunkPath);
     const newChunkPath = path.join(fake.chunksDir, "index-def.js");
-    const newChunkContent = `// updated squab chunk\nconst CURSOR = { ${SIGNATURE}, agentName: "cursor" };\nfunction Gi(){ rt(x); ot(y); }\n`;
+    const newChunkContent = `// updated squab chunk\nconst kc={${SIGNATURE},agentName:"cursor"};function Gi(){rt(x),ot(kc)}\n`;
     writeFileSync(newChunkPath, newChunkContent, "utf8");
 
     const second = apply({
@@ -173,7 +174,7 @@ test("apply re-applies after Xirp updates (chunk replaced with a new, unpatched 
     assert.equal(second.chunkPath, newChunkPath);
 
     const patched = readFileSync(newChunkPath, "utf8");
-    assert.ok(patched.includes(IMPORT_LINE));
+    assert.ok(isPatched(patched));
     assert.ok(existsSync(`${newChunkPath}.orig`));
     assert.equal(readFileSync(`${newChunkPath}.orig`, "utf8"), newChunkContent);
 
@@ -217,4 +218,11 @@ test("resolveHarnessSource fails clearly when neither dist nor src harness exist
       return true;
     },
   );
+});
+
+test("detectRegistryIdentifiers derives names from the real minified shape", () => {
+  const chunk = 'x={flag:"--launch-pi"},vc={flag:"--launch-cursor",agentName:"cursor"};function _c(){V(Qe),V(Zn),V($o),V(pa),V(So),z(yc),z(wc),z(Sc),z(bc),z(vc)}';
+  assert.deepEqual(detectRegistryIdentifiers(chunk), { registerAdapter: "V", registerAgent: "z", cursorVar: "vc" });
+  assert.equal(detectRegistryIdentifiers('vc={flag:"--launch-cursor"};function f(){a(vc),b(x),c(y)}'), null);
+  assert.equal(detectRegistryIdentifiers('nothing here'), null);
 });

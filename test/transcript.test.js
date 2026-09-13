@@ -213,3 +213,11 @@ test("toParsedMessages produces squab's flattened row shape", async () => {
   assert.equal(rows[3].toolError, false);
   assert.equal(rows[4].role, "system");
 });
+
+test("historyToMessages unwraps Grok's <user_query> wrapper around typed prompts", async () => {
+  const { historyToMessages } = await import("../src/harness/transcript.js");
+  const line = JSON.stringify({ type: "user", content: [{ type: "text", text: "<user_query>\nfix the bug\n</user_query>" }], prompt_index: 0 });
+  const { messages } = historyToMessages(line, { baseTime: "2026-01-01T00:00:00.000Z" });
+  const user = messages.find((m) => m.type === "user_message");
+  assert.equal(user.text, "fix the bug");
+});

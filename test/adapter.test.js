@@ -311,7 +311,7 @@ test("resumeArgs and formatResumeCommand use --resume with the session id", asyn
 });
 
 test("freshLaunchArgs pins a session id unless the user already chose one", () => {
-  const id = "aaaa-bbbb";
+  const id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
   assert.deepEqual(grokAdapter.freshLaunchArgs(id, []), ["--session-id", id]);
   assert.deepEqual(grokAdapter.freshLaunchArgs(id, ["--model", "grok-4.6"]), [
     "--session-id",
@@ -334,13 +334,6 @@ test("freshLaunchArgs pins a session id unless the user already chose one", () =
       `expected no args for ${conflicting.join(" ")}`,
     );
   }
-});
-
-test("terminateKeystrokes sends two ctrl-c presses", () => {
-  assert.deepEqual(grokAdapter.terminateKeystrokes(), [
-    { bytes: "\x03" },
-    { bytes: "\x03", afterMs: 120 },
-  ]);
 });
 
 test("sanitize is the identity", () => {
@@ -428,4 +421,14 @@ test("the adapter exposes every required member and no hook trio", () => {
   for (const absent of ["hookCapabilities", "hookScript", "hookInstallEntry"]) {
     assert.equal(grokAdapter[absent], undefined, `${absent} must stay unimplemented`);
   }
+});
+
+test("freshLaunchArgs falls back to recency discovery for non-UUID ids", () => {
+  assert.deepEqual(grokAdapter.freshLaunchArgs("not-a-uuid", []), []);
+});
+
+test("terminateKeystrokes cancels the turn then sends /exit", () => {
+  const keys = grokAdapter.terminateKeystrokes();
+  assert.equal(keys[0].bytes, "\x03");
+  assert.equal(keys[1].bytes, "/exit\r");
 });

@@ -221,6 +221,14 @@ function emptyTimeline() {
   return { userTs: new Map(), agentTs: [], usageTurns: [], sessionId: null };
 }
 
+// Grok wraps the typed prompt as "<user_query>\n...\n</user_query>" before
+// storing it; strip that so Xirp shows what the user actually typed.
+const USER_QUERY_RE = /^\s*<user_query>\s*([\s\S]*?)\s*<\/user_query>\s*$/;
+function unwrapUserQuery(text) {
+  const m = typeof text === "string" ? text.match(USER_QUERY_RE) : null;
+  return m ? m[1] : text;
+}
+
 function joinTextBlocks(content, separator) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -275,7 +283,7 @@ function historyToMessages(historyText, opts = {}) {
 
     if (type === "user") {
       if (entry.synthetic_reason !== undefined) continue;
-      const text = joinTextBlocks(entry.content, "\n");
+      const text = unwrapUserQuery(joinTextBlocks(entry.content, "\n"));
       if (typeof entry.prompt_index === "number") {
         const fromTimeline = timeline.userTs.get(Math.trunc(entry.prompt_index));
         if (fromTimeline !== undefined) candidateMs = fromTimeline;

@@ -46,3 +46,10 @@ test("resolveAppPath prefers explicit app, then XIRP_APP env, then the default",
   );
   assert.equal(resolveAppPath({ env: {} }), DEFAULT_APP_PATH);
 });
+
+test("findRegistryChunk matches both minified and prettified signature forms", async () => {
+  const { REGISTRY_SIGNATURE } = await import("../src/patcher/locate.js");
+  assert.ok(REGISTRY_SIGNATURE.test('flag:"--launch-cursor"'));
+  assert.ok(REGISTRY_SIGNATURE.test('flag: "--launch-cursor"'));
+  assert.ok(!REGISTRY_SIGNATURE.test('flag:"--launch-claude"'));
+});

@@ -16,7 +16,9 @@ export const DEFAULT_APP_PATH = "/Applications/Xirp.app";
 
 // The string that identifies the squab chunk responsible for registering
 // coding-agent harnesses (Cursor is one of the built-in ones).
-export const REGISTRY_SIGNATURE = 'flag: "--launch-cursor"';
+// Matched as a regex because the shipped chunk is minified (`flag:"--launch-cursor"`)
+// while prettified copies have a space after the colon.
+export const REGISTRY_SIGNATURE = /flag:\s*"--launch-cursor"/;
 
 export class LocateError extends Error {
   constructor(message, { code = 1 } = {}) {
@@ -128,12 +130,12 @@ export function findRegistryChunk(chunksDir) {
   for (const name of entries) {
     const filePath = path.join(chunksDir, name);
     const content = readFileSync(filePath, "utf8");
-    if (content.includes(REGISTRY_SIGNATURE)) {
+    if (REGISTRY_SIGNATURE.test(content)) {
       return { path: filePath, name, content };
     }
   }
   throw new LocateError(
-    `No chunk in ${chunksDir} contains the registry signature (${REGISTRY_SIGNATURE}). ` +
+    `No chunk in ${chunksDir} contains the registry signature (${REGISTRY_SIGNATURE.source}). ` +
       `This Xirp version is unsupported.`,
     { code: 2 },
   );

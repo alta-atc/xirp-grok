@@ -42,6 +42,8 @@ const DEFAULT_MODEL = "grok-4.6";
 const DEFAULT_SYSTEM_PROMPT =
   "You are Grok Build, xAI's coding agent, running in the user's terminal.";
 const SYSTEM_SEED_SCAN_LIMIT = 20;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const RESUME_CONFLICT_FLAGS = new Set([
   "--session-id",
   "-s",
@@ -326,11 +328,18 @@ const grokAdapter = {
         arg.startsWith("--resume=") ||
         arg.startsWith("--fork-session="),
     );
-    return conflicts ? [] : ["--session-id", sessionId];
+    // Grok's --session-id must be a UUID; squab ids are crypto.randomUUID()
+    // in practice, but if a caller hands us something else, fall back to
+    // squab's recency discovery instead of making grok reject the launch.
+    if (conflicts || !UUID_RE.test(String(sessionId))) return [];
+    return ["--session-id", sessionId];
   },
 
   terminateKeystrokes() {
-    return [{ bytes: "\x03" }, { bytes: "\x03", afterMs: 120 }];
+    // Verified against grok 1.0.30 through a pty: double Ctrl-C and ctrl+q do
+    // not quit the TUI, "/exit" does. Ctrl-C first cancels any running turn
+    // so the slash command lands on an idle prompt.
+    return [{ bytes: "\x03" }, { bytes: "/exit\r", afterMs: 150 }];
   },
 
   sanitize(messages) {

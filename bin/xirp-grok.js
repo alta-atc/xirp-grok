@@ -29,7 +29,7 @@ import {
   locate,
   LocateError,
 } from "../src/patcher/locate.js";
-import { apply, remove, IMPORT_LINE, PatchError } from "../src/patcher/inject.js";
+import { apply, remove, isPatched, PatchError } from "../src/patcher/inject.js";
 import { readState, stateFilePath } from "../src/patcher/state.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,7 +83,7 @@ function cmdStatus({ app }) {
   try {
     const loc = locate({ app });
     chunkPath = loc.chunk.path;
-    patched = loc.chunk.content.includes(IMPORT_LINE);
+    patched = isPatched(loc.chunk.content);
     console.log(`Chunk:    ${chunkPath}`);
     console.log(`Patched:  ${patched ? "yes" : "no"}`);
   } catch (err) {
@@ -182,7 +182,7 @@ function cmdDoctor({ app }) {
       chunk = findRegistryChunk(chunksDir);
       console.log(`Registry chunk:  ${chunk.path}`);
       console.log(
-        `Chunk patched:   ${chunk.content.includes(IMPORT_LINE) ? "yes" : "no"}`,
+        `Chunk patched:   ${isPatched(chunk.content) ? "yes" : "no"}`,
       );
     } catch (err) {
       console.log(`Registry chunk:  not found (${err.message})`);

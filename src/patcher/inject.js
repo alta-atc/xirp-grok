@@ -28,8 +28,53 @@ import { readState, writeState, clearState } from "./state.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
-export const IMPORT_LINE =
-  '\nimport { registerGrok } from "./grok-harness.js"; registerGrok(rt, ot);\n';
+// Marker that identifies our injected line regardless of which local
+// identifiers the registry functions happen to have in a given Xirp build.
+export const IMPORT_MARKER = 'from "./grok-harness.js"';
+const IMPORT_LINE_RE = /\nimport \{ registerGrok \} from "\.\/grok-harness\.js"; registerGrok\([A-Za-z_$][\w$]*, [A-Za-z_$][\w$]*\);\n/g;
+
+export function isPatched(content) {
+  return content.includes(IMPORT_MARKER);
+}
+
+export function buildImportLine({ registerAdapter, registerAgent }) {
+  return `\nimport { registerGrok } from "./grok-harness.js"; registerGrok(${registerAdapter}, ${registerAgent});\n`;
+}
+
+/**
+ * Work out which local identifiers the registry chunk uses for squab's
+ * registerAdapter / registerAgent. The chunk is minified and the names change
+ * per build (0.32.0 uses V and z), so they are derived from structure:
+ *   1. the const holding the cursor harness def:  vc={flag:"--launch-cursor",...}
+ *   2. the call that registers it:                  z(vc)   -> registerAgent
+ *   3. the enclosing zero-arg function body has exactly one other callee,
+ *      used for the adapter objects:                V(Qe)   -> registerAdapter
+ */
+export function detectRegistryIdentifiers(content) {
+  const defMatch = content.match(
+    /([A-Za-z_$][\w$]*)\s*=\s*\{\s*flag:\s*"--launch-cursor"/,
+  );
+  if (!defMatch) return null;
+  const cursorVar = defMatch[1];
+  const callRe = new RegExp(`([A-Za-z_$][\\w$]*)\\(\\s*${cursorVar}\\s*\\)`);
+  const callMatch = content.match(callRe);
+  if (!callMatch) return null;
+  const registerAgent = callMatch[1];
+  const callIdx = callMatch.index;
+  const fnStart = content.lastIndexOf("function", callIdx);
+  if (fnStart < 0) return null;
+  const bodyOpen = content.indexOf("{", fnStart);
+  const bodyClose = content.indexOf("}", callIdx);
+  if (bodyOpen < 0 || bodyClose < 0 || bodyOpen > callIdx) return null;
+  const body = content.slice(bodyOpen + 1, bodyClose);
+  const callees = new Set(
+    [...body.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]),
+  );
+  callees.delete(registerAgent);
+  if (callees.size !== 1) return null;
+  const [registerAdapter] = callees;
+  return { registerAdapter, registerAgent, cursorVar };
+}
 
 export const HARNESS_FILENAME = "grok-harness.js";
 
@@ -147,14 +192,16 @@ function verify({ nodePath, cliPath }) {
  * into, near the registry signature. If a future Xirp release renamed them,
  * fail loudly rather than silently injecting into the wrong scope.
  */
-function assertRegistrySymbolsPresent(chunk) {
-  if (!/\brt\s*\(/.test(chunk.content) || !/\bot\s*\(/.test(chunk.content)) {
+function resolveRegistryIdentifiers(chunk) {
+  const ids = detectRegistryIdentifiers(chunk.content);
+  if (!ids) {
     throw new LocateError(
-      `Chunk ${chunk.path} has the registry signature but is missing the ` +
-        `expected rt(...)/ot(...) calls. This Xirp version is unsupported.`,
+      `Chunk ${chunk.path} has the registry signature but its registerAdapter/` +
+        `registerAgent calls could not be identified. This Xirp version is unsupported.`,
       { code: 2 },
     );
   }
+  return ids;
 }
 
 /**
@@ -175,7 +222,7 @@ export function apply({
   const harnessDest = path.join(chunksDir, HARNESS_FILENAME);
   const backupPath = `${chunk.path}.orig`;
 
-  const alreadyPatched = chunk.content.includes(IMPORT_LINE);
+  const alreadyPatched = isPatched(chunk.content);
 
   if (alreadyPatched && !force) {
     writeState(
@@ -203,7 +250,8 @@ export function apply({
     };
   }
 
-  assertRegistrySymbolsPresent(chunk);
+  const ids = resolveRegistryIdentifiers(chunk);
+  const importLine = buildImportLine(ids);
 
   const harnessSource = resolveHarnessSource({
     repoRoot,
@@ -214,7 +262,7 @@ export function apply({
   if (alreadyPatched && force) {
     // Refresh path: strip the existing import line so we don't duplicate it,
     // then re-append below with (possibly) an updated harness.
-    baseContent = chunk.content.split(IMPORT_LINE).join("");
+    baseContent = chunk.content.replace(IMPORT_LINE_RE, "");
   }
 
   const backupCreatedThisRun = !existsSync(backupPath);
@@ -230,7 +278,7 @@ export function apply({
     }
   }
 
-  const newContent = baseContent + IMPORT_LINE;
+  const newContent = baseContent + importLine;
 
   try {
     copyFileSync(harnessSource, harnessDest);
