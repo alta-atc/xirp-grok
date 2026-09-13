@@ -20,7 +20,7 @@ const outDir = path.join(repoRoot, "dist");
 const outFile = path.join(outDir, "grok-harness.js");
 
 /** Source order matters: later files reference earlier declarations at runtime. */
-const SOURCES = ["paths.js", "transcript.js", "adapter.js"];
+const SOURCES = ["paths.js", "transcript.js", "hooks.js", "adapter.js"];
 const ALLOWED_MODULES = new Set([
   "node:fs",
   "node:fs/promises",

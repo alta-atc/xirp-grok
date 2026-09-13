@@ -396,7 +396,7 @@ test("the harness definition matches squab's expected shape", () => {
   });
 });
 
-test("the adapter exposes every required member and no hook trio", () => {
+test("the adapter exposes every required member and the hook trio", () => {
   for (const required of [
     "sessionRoot",
     "locateLatest",
@@ -418,9 +418,9 @@ test("the adapter exposes every required member and no hook trio", () => {
   }
   assert.equal(grokAdapter.agent, "grok");
   assert.equal(typeof grokAdapter.settingsCatalog.list, "function");
-  for (const absent of ["hookCapabilities", "hookScript", "hookInstallEntry"]) {
-    assert.equal(grokAdapter[absent], undefined, `${absent} must stay unimplemented`);
-  }
+  assert.ok(grokAdapter.hookCapabilities, "hookCapabilities must be implemented");
+  assert.equal(typeof grokAdapter.hookScript, "function");
+  assert.equal(typeof grokAdapter.hookInstallEntry, "function");
 });
 
 test("freshLaunchArgs falls back to recency discovery for non-UUID ids", () => {
