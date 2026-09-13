@@ -2,6 +2,7 @@
   "name": "xirp-grok",
   "version": "0.1.0",
   "description": "Add xAI Grok Build as a coding agent in Spotify's Xirp desktop app (patch + re-apply tool)",
+  "keywords": ["xirp", "grok", "grok-build", "xai", "squab", "coding-agent", "electron-patch"],
   "type": "module",
   "bin": { "xirp-grok": "bin/xirp-grok.js" },
   "engines": { "node": ">=20" },
