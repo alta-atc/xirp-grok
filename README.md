@@ -100,7 +100,7 @@ effect, since the watcher doesn't relaunch it for you.
 ## Risks, plainly
 
 1. **Signature.** Editing files inside a signed app bundle invalidates its code signature seal.
-   Xirp still launches fine in practice, but `codesign --verify` will report a failure. We
+   Xirp is expected to still launch (the patched files are plain JS loaded by the bundled node, not by the system loader), but `codesign --verify` will report a failure. This has been verified on a scratch copy of squab, not yet on a live install; see `docs/COMPAT.md`. We
    deliberately do not re-sign the app — re-signing changes its identity, which can lock Xirp out
    of its own Keychain-stored login.
 2. **Auto-update.** Xirp updates overwrite the patched chunk with a fresh, unpatched one. Re-run
