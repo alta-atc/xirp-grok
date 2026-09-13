@@ -106,6 +106,22 @@ function cmdStatus({ app }) {
   }
 }
 
+// macOS (13+) protects other apps' bundles in /Applications with the
+// "App Management" privacy permission. Writes from a terminal that lacks it
+// fail with EPERM even though the files are owned by the user.
+const APP_MANAGEMENT_HINT =
+  "macOS refused to modify Xirp.app (App Management protection). Either:\n" +
+  "  - re-run with sudo:  sudo node " + fileURLToPath(import.meta.url) + " <command>\n" +
+  "  - or grant your terminal app 'App Management' in System Settings >\n" +
+  "    Privacy & Security > App Management, then reopen the terminal.";
+
+function failWithBundleHint(err, code) {
+  const msg = /EPERM/.test(err.message) && /Xirp\.app/.test(err.message)
+    ? `error: ${err.message}\n${APP_MANAGEMENT_HINT}`
+    : `error: ${err.message}`;
+  fail(msg, code);
+}
+
 function cmdApply({ app, ifNeeded, force }) {
   let result;
   try {
@@ -114,7 +130,7 @@ function cmdApply({ app, ifNeeded, force }) {
     if (err instanceof LocateError) {
       fail(`error: ${err.message}`, err.code);
     }
-    fail(`error: ${err.message}`, err instanceof PatchError ? err.code : 1);
+    failWithBundleHint(err, err instanceof PatchError ? err.code : 1);
     return;
   }
 
@@ -137,7 +153,7 @@ function cmdRemove({ app }) {
   try {
     result = remove({ app });
   } catch (err) {
-    fail(`error: ${err.message}`, err instanceof PatchError ? err.code : 1);
+    failWithBundleHint(err, err instanceof PatchError ? err.code : 1);
     return;
   }
 

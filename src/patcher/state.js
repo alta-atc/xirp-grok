@@ -2,7 +2,7 @@
 // records what was patched and with what hashes so `apply`/`remove`/`status`
 // can detect drift (e.g. Xirp updated since the last apply).
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, chownSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -35,10 +35,26 @@ export function readState(home = os.homedir()) {
  * `state` shape: { xirpVersion, chunkPath, chunkSha256Original,
  * chunkSha256Patched, harnessSha256, patchVersion, appliedAt }
  */
+// When run under sudo (needed on macOS because of App Management protection),
+// keep the state marker owned by the invoking user so later unprivileged
+// `status`/`doctor` runs and future applies can still read and replace it.
+function chownToSudoUser(p) {
+  const uid = Number(process.env.SUDO_UID);
+  const gid = Number(process.env.SUDO_GID);
+  if (process.getuid?.() !== 0 || !Number.isInteger(uid) || uid <= 0) return;
+  try {
+    chownSync(p, uid, Number.isInteger(gid) && gid >= 0 ? gid : -1);
+  } catch (err) {
+    process.stderr.write(`warning: could not chown ${p} to uid ${uid}: ${err.message}\n`);
+  }
+}
+
 export function writeState(state, home = os.homedir()) {
   const dir = stateDir(home);
   mkdirSync(dir, { recursive: true });
   writeFileSync(stateFilePath(home), JSON.stringify(state, null, 2) + "\n", "utf8");
+  chownToSudoUser(dir);
+  chownToSudoUser(stateFilePath(home));
   return state;
 }
 

@@ -51,6 +51,14 @@ npm link
 xirp-grok apply
 ```
 
+> **macOS App Management.** Since macOS 13, writing inside another app's bundle in
+> `/Applications` needs the "App Management" privacy permission, and a plain terminal usually
+> does not have it, so `apply`/`remove` fail with `EPERM` even though you own the files.
+> Either run them with `sudo` (`sudo node bin/xirp-grok.js apply`; the state marker stays owned
+> by you) or grant your terminal app App Management in System Settings > Privacy & Security and
+> reopen it. The launchd watcher runs unprivileged, so it only works once that permission is
+> granted to the `node` binary it runs.
+
 Then **restart Xirp**. Grok will appear in the agent picker.
 
 ## Commands
