@@ -184,6 +184,29 @@ test("apply re-applies after Xirp updates (chunk replaced with a new, unpatched 
   }
 });
 
+test("apply rolls back on a failed verification, leaving the chunk untouched", () => {
+  const fake = createFakeApp({ includeGrok: false });
+  const home = fakeHome(fake.tmpDir);
+  try {
+    assert.throws(
+      () => apply({ app: fake.appPath, env: {}, home, harnessOverride: STUB_HARNESS }),
+      (err) => {
+        assert.ok(err instanceof PatchError);
+        assert.match(err.message, /^Rolled back: /);
+        assert.match(err.message, /grok/);
+        return true;
+      },
+    );
+
+    assert.equal(readFileSync(fake.chunkPath, "utf8"), fake.chunkContent);
+    assert.ok(!existsSync(`${fake.chunkPath}.orig`));
+    assert.ok(!existsSync(path.join(fake.chunksDir, HARNESS_FILENAME)));
+    assert.equal(readState(home), null);
+  } finally {
+    rmSync(fake.tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("resolveHarnessSource fails clearly when neither dist nor src harness exists", async () => {
   const { resolveHarnessSource } = await import("../src/patcher/inject.js");
   assert.throws(

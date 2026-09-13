@@ -103,8 +103,20 @@ function verify({ nodePath, cliPath }) {
       `Verification failed: --available-harnesses did not print JSON:\n${availableRaw}`,
     );
   }
-  const hasGrok =
-    Array.isArray(available) && available.some((h) => h && h.agentName === "grok");
+  // Real squab prints an object ({schema, count, harnesses: [...]}); accept a
+  // bare array too for robustness (and for lightweight test fakes).
+  const harnessList = Array.isArray(available)
+    ? available
+    : Array.isArray(available?.harnesses)
+      ? available.harnesses
+      : null;
+  if (!harnessList) {
+    throw new PatchError(
+      `Verification failed: --available-harnesses output has neither an array ` +
+        `nor a "harnesses" array:\n${availableRaw}`,
+    );
+  }
+  const hasGrok = harnessList.some((h) => h && h.agentName === "grok");
   if (!hasGrok) {
     throw new PatchError(
       `Verification failed: no harness with agentName "grok" in --available-harnesses output:\n${availableRaw}`,
@@ -171,7 +183,7 @@ export function apply({
         xirpVersion: version,
         chunkPath: chunk.path,
         chunkSha256Original: existsSync(backupPath)
-          ? sha256(readFileSync(backupPath, "utf8"))
+          ? sha256(readFileSync(backupPath))
           : null,
         chunkSha256Patched: sha256(chunk.content),
         harnessSha256: existsSync(harnessDest)
@@ -205,23 +217,43 @@ export function apply({
     baseContent = chunk.content.split(IMPORT_LINE).join("");
   }
 
-  if (!existsSync(backupPath)) {
-    // Preserve the exact original bytes before touching anything.
-    writeFileSync(backupPath, baseContent, "utf8");
+  const backupCreatedThisRun = !existsSync(backupPath);
+  if (backupCreatedThisRun) {
+    // Preserve the exact original bytes before touching anything. When the
+    // chunk on disk is exactly `chunk.path`'s current content (the normal,
+    // non-refresh path), copy it byte-for-byte rather than round-tripping
+    // through a decoded string.
+    if (alreadyPatched && force) {
+      writeFileSync(backupPath, baseContent, "utf8");
+    } else {
+      copyFileSync(chunk.path, backupPath);
+    }
   }
 
-  copyFileSync(harnessSource, harnessDest);
-
   const newContent = baseContent + IMPORT_LINE;
-  writeFileSync(chunk.path, newContent, "utf8");
 
-  verify({ nodePath, cliPath });
+  try {
+    copyFileSync(harnessSource, harnessDest);
+    writeFileSync(chunk.path, newContent, "utf8");
+    verify({ nodePath, cliPath });
+  } catch (err) {
+    // Never leave Xirp in a broken half-patched state: restore the chunk,
+    // drop the harness copy, and remove the backup only if we created it
+    // in this run (a pre-existing backup is still needed for a future
+    // `remove`).
+    writeFileSync(chunk.path, readFileSync(backupPath));
+    if (existsSync(harnessDest)) unlinkSync(harnessDest);
+    if (backupCreatedThisRun) unlinkSync(backupPath);
+    throw new PatchError(`Rolled back: ${err.message}`, {
+      code: err.code ?? 1,
+    });
+  }
 
-  const backupContent = readFileSync(backupPath, "utf8");
+  const backupBuffer = readFileSync(backupPath);
   const state = {
     xirpVersion: version,
     chunkPath: chunk.path,
-    chunkSha256Original: sha256(backupContent),
+    chunkSha256Original: sha256(backupBuffer),
     chunkSha256Patched: sha256(newContent),
     harnessSha256: sha256(readFileSync(harnessDest, "utf8")),
     patchVersion: readPatchVersion(repoRoot),
@@ -264,12 +296,12 @@ export function remove({ app, env = process.env, home } = {}) {
     );
   }
 
-  const backupContent = readFileSync(backupPath, "utf8");
-  const backupHash = sha256(backupContent);
+  const backupBuffer = readFileSync(backupPath);
+  const backupHash = sha256(backupBuffer);
 
-  writeFileSync(chunkPath, backupContent, "utf8");
+  copyFileSync(backupPath, chunkPath);
 
-  const restoredHash = sha256(readFileSync(chunkPath, "utf8"));
+  const restoredHash = sha256(readFileSync(chunkPath));
   if (restoredHash !== backupHash) {
     throw new PatchError(
       `Restore verification failed: ${chunkPath} does not match its backup after writing. ` +

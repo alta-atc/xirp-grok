@@ -8,16 +8,28 @@ import path from "node:path";
 
 export const SIGNATURE = 'flag: "--launch-cursor"';
 
-const FAKE_NODE_SCRIPT = `#!/bin/sh
+function fakeNodeScript({ includeGrok = true } = {}) {
+  const harnesses = [{ agentName: "cursor" }];
+  if (includeGrok) harnesses.push({ agentName: "grok" });
+  // Mirrors the real squab CLI's --available-harnesses shape:
+  // {"schema":"squab.available-harnesses/v3","count":N,"harnesses":[...]},
+  // not a bare array.
+  const payload = JSON.stringify({
+    schema: "squab.available-harnesses/v3",
+    count: harnesses.length,
+    harnesses,
+  });
+  return `#!/bin/sh
 for arg in "$@"; do
   case "$arg" in
     --version) echo "0.10.12"; exit 0 ;;
-    --available-harnesses) echo '[{"agentName":"cursor"},{"agentName":"grok"}]'; exit 0 ;;
+    --available-harnesses) echo '${payload}'; exit 0 ;;
   esac
 done
 echo "fake node: unrecognized args: $@" >&2
 exit 1
 `;
+}
 
 function infoPlist(version) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -41,6 +53,7 @@ function infoPlist(version) {
  * @param {boolean} [opts.withSignature] - include the --launch-cursor signature in the chunk
  * @param {boolean} [opts.withRtOt] - include rt(...)/ot(...) calls in the chunk
  * @param {string} [opts.chunkName] - filename for the registry chunk
+ * @param {boolean} [opts.includeGrok] - whether the fake node's --available-harnesses reports grok
  * @returns {{tmpDir, appPath, nodePath, cliPath, chunksDir, chunkPath}}
  */
 export function createFakeApp({
@@ -48,6 +61,7 @@ export function createFakeApp({
   withSignature = true,
   withRtOt = true,
   chunkName = "index-abc.js",
+  includeGrok = true,
 } = {}) {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "xirp-grok-test-"));
   const appPath = path.join(tmpDir, "Xirp.app");
@@ -67,7 +81,7 @@ export function createFakeApp({
   );
   mkdirSync(nodeRuntimeDir, { recursive: true });
   const nodePath = path.join(nodeRuntimeDir, "node");
-  writeFileSync(nodePath, FAKE_NODE_SCRIPT, "utf8");
+  writeFileSync(nodePath, fakeNodeScript({ includeGrok }), "utf8");
   chmodSync(nodePath, 0o755);
 
   const squabDir = path.join(
